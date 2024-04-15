@@ -18,6 +18,7 @@ let
 end
 
 # Okay let's do it more nicely
+samplerate=DEFAULT_SAMPLE_RATE
 freq_events = flatten_midi_to_freq_events(track.events; ms_per_tick=ms_per_tick(midi))
-sig = audio_signal_from_freq_events(freq_events)
-play_audio_signal(; sig...)
+samples = audio_samples_from_freq_events(freq_events[1:60]; samplerate)
+play_audio_signal(samples, samplerate)

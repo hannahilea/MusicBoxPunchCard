@@ -5,8 +5,10 @@ using PortAudio, SampledSignals
 using ProgressMeter
 
 export midi_to_hz, play_single_freq, DEFAULT_MUSIC_BOX_NOTES, flatten_midi_to_freq_event,
-       audio_signal_from_freq_events, audio_samples_from_freq_event, play_audio_signal,
-       flatten_midi_to_freq_events
+       audio_samples_from_freq_events, audio_samples_from_freq_event, play_audio_signal,
+       flatten_midi_to_freq_events, DEFAULT_SAMPLE_RATE
+
+const DEFAULT_SAMPLE_RATE = 11250.0
 
 const DEFAULT_MUSIC_BOX_NOTES = let
     start_note = 68 # Ab3 
@@ -20,9 +22,9 @@ function audio_samples_from_freq_event(freq; duration, samplerate)
     return cos.(2pi * (1:(duration * samplerate)) * freq / samplerate)
 end
 
-function play_single_freq(freq, duration::Float64=0.1; samplerate=11250.0)
+function play_single_freq(freq; duration::Float64=0.1, samplerate)
     samples = audio_samples_from_freq_event(freq; duration, samplerate)
-    play_audio_signal(; samples, samplerate)
+    play_audio_signal(samples, samplerate)
     return samples
 end
 
@@ -60,7 +62,7 @@ function flatten_midi_to_freq_events(midi_events::Vector{TrackEvent}; ms_per_tic
     return freq_events
 end
 
-function audio_signal_from_freq_events(freq_events; samplerate=11250)
+function audio_samples_from_freq_events(freq_events; samplerate=11250)
     _sec_to_index(sec) = sec * samplerate + 1
     max_duration = maximum([e.start_time + e.duration for e in freq_events])
     samples = vec(zeros(Int(ceil(_sec_to_index(max_duration)))))
@@ -72,10 +74,10 @@ function audio_signal_from_freq_events(freq_events; samplerate=11250)
         @info "An event!" start event_samples
         samples[start:(start + length(event_samples) - 1)] += event_samples
     end
-    return (; samples, samplerate)
+    return samples
 end
 
-function play_audio_signal(; samples, samplerate)
+function play_audio_signal(samples, samplerate)
     return PortAudioStream(0, 2; samplerate) do stream
         return write(stream, samples)
     end
