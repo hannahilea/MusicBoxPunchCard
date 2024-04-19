@@ -7,7 +7,10 @@ using ProgressMeter
 export midi_to_hz, play_single_freq, DEFAULT_MUSIC_BOX_NOTES, flatten_midi_to_freq_event,
        audio_samples_from_freq_events, audio_samples_from_freq_event, play_audio_signal,
        flatten_midi_to_midi_notes, midi_notes_to_freq_notes, DEFAULT_SAMPLE_RATE,
-       play_midi_notes, find_best_transposition_amount, generate_music_box_midi
+       play_midi_notes, find_best_transposition_amount, generate_music_box_midi,
+       get_min_max_internote_ticks
+
+export midi_to_musicbox
 
 const DEFAULT_SAMPLE_RATE = 11250.0
 const MUSIC_BOX_NOTE_DURATION_TICKS = 96
@@ -15,7 +18,7 @@ const MUSIC_BOX_NOTE_DURATION_TICKS = 96
 const DEFAULT_MUSIC_BOX_NOTES = let
     start_note = 68 # Ab3 
     start_scale = start_note .+ [0, 2, 4, 5, 7, 9, 11, 12]
-    unique(vcat(start_scale, start_scale .+ 12))
+    sort(unique(vcat(start_scale, start_scale .+ 12)); rev=true)
 end
 
 midi_to_hz(v::Int) = 440 * 2^((v - 69) / 12)
@@ -139,6 +142,51 @@ function find_best_transposition_amount(midi_notes::Vector{AbsoluteNoteMidi};
     end
     @warn "Best transposition amount ($best_offset) only retains $(highest_num_valid_notes) of the original $(length(midi_notes)) notes"
     return best_offset
+end
+
+function get_min_max_internote_ticks(midi_notes::Vector{AbsoluteNoteMidi})
+    per_note = map(unique(n.midi_note for n in midi_notes)) do note
+        single_note = filter(n -> n.midi_note == note, midi_notes)
+        length(single_note) <= 1 && return (missing, missing)
+        dists = [n.start_time_ticks for n in single_note]
+        d = diff(dists)
+        return minimum(d), maximum(d)
+    end
+    @info skipmissing(per_note)
+    min = minimum(skipmissing(first(d) for d in per_note))
+    max = maximum(skipmissing(last(d) for d in per_note))
+    return (; per_note, max, min)
+end
+
+function midi_to_musicbox(filename; allowed_notes=DEFAULT_MUSIC_BOX_NOTES)
+    midi = load(filename)
+    track = midi.tracks[1]
+    song_midi = flatten_midi_to_midi_notes(track.events)
+    sec_per_tick = MIDI.ms_per_tick(midi) / 1000
+    transpose_amount = find_best_transposition_amount(song_midi)
+    song_transposed = generate_music_box_midi(song_midi; transpose_amount)
+
+    # GREAT!!!!! :D Now: let's get it into a format that cuttle can handle
+    # For now, set it up such that the x distance between two adjacent holes is 1, 
+    # such that cuttle can appropariately scale the x axis to prevent overlapping notes 
+    # In future, might want to control for speed of rotation 
+    tick_ranges = get_min_max_internote_ticks(song_transposed)
+    @info tick_ranges
+
+    song_coords_x = map(n -> tick_ranges.min > 0 ? n.start_time_ticks / tick_ranges.min :
+                             n.start_time_ticks, song_transposed)
+    song_coords_y = map(n -> findfirst(==(n.midi_note), allowed_notes) - 1,
+                        song_transposed)
+
+    # let
+    #     # ...also subtract 1 from y index to convert from 1-based index to 0-based js index
+    #     str = join(map(c -> string(first(c), ",", last(c) - 1), song_coords), "\n")
+    #     new_file = replace(filename, ".mid" => ".txt")
+    #     write(new_file, str)
+    #     @info "Wrote $(new_file)"
+    # end
+
+    return (; song_transposed, sec_per_tick, song_coords_x, song_coords_y)
 end
 
 end # module MusicBoxMIDI

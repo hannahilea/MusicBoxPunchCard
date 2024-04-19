@@ -32,3 +32,33 @@ song_midi = midi_notes[1:60]
 transpose_amount = find_best_transposition_amount(song_midi)
 song_transposed = generate_music_box_midi(song_midi; transpose_amount)
 play_midi_notes(song_transposed; sec_per_tick)
+
+# GREAT!!!!! :D Now: let's get it into a format that cuttle can handle
+# For now, set it up such that the x distance between two adjacent holes is 1, 
+# such that cuttle can appropariately scale the x axis to prevent overlapping notes 
+# In future, might want to control for speed of rotation 
+tick_ranges = get_min_max_internote_ticks(song_transposed)
+
+song_coords = map(song_transposed) do n
+    x = n.start_time_ticks / tick_ranges.min
+    # Guaranteed to exist b/c we've already run through filtering out invalid notes:
+    y = findfirst(==(n.midi_note), DEFAULT_MUSIC_BOX_NOTES) - 1
+    return (x, y)
+end
+
+song_coords_x = map(n -> n.start_time_ticks / tick_ranges.min, song_transposed)
+song_coords_y = map(n -> findfirst(==(n.midi_note), DEFAULT_MUSIC_BOX_NOTES) - 1, song_transposed)
+
+@info "Copy into ThousandMiles `notePositionsX`:\n$(song_coords_x)"
+@info "Copy into ThousandMiles `notePositionsY`:\n$(song_coords_y)"
+
+
+baby = midi_to_musicbox("babypunchcardmelody_willw_arr.mid")
+play_midi_notes(baby.song_transposed; baby.sec_per_tick)
+@info "Copy into Baby `notePositionsX`:\n$(baby.song_coords_x)"
+@info "Copy into Baby `notePositionsY`:\n$(baby.song_coords_y)"
+
+thousand = midi_to_musicbox("ThousandMiles.mid")
+play_midi_notes(baby.song_transposed; baby.sec_per_tick)
+@info "Copy into Thousand `notePositionsX`:\n$(thousand.song_coords_x)"
+@info "Copy into Thousand `notePositionsY`:\n$(thousand.song_coords_y)"
