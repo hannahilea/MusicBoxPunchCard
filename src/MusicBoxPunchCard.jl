@@ -1,4 +1,4 @@
-module MusicBoxMIDI
+module MusicBoxPunchCard
 
 using MIDI
 using PortAudio, SampledSignals
@@ -189,4 +189,4 @@ function midi_to_musicbox(filename; allowed_notes=DEFAULT_MUSIC_BOX_NOTES)
     return (; song_transposed, sec_per_tick, song_coords_x, song_coords_y)
 end
 
-end # module MusicBoxMIDI
+end # module MusicBoxPunchCard

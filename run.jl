@@ -1,6 +1,6 @@
 using Pkg
 Pkg.activate(".")
-using MusicBoxMIDI
+using MusicBoxPunchCard
 using MIDI
 
 samplerate = DEFAULT_SAMPLE_RATE
