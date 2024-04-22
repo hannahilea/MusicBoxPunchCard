@@ -1,4 +1,4 @@
-# MusicBoxPunchCard
+# MusicBoxPunchCard: Create playable punch cards for music boxes!
 
 Utilities for generating physical punch cards for playable music boxes (e.g. 15-note [Kikkerland music box kit](https://kikkerland.com/products/make-your-own-music-box-kit) or [30-note Wingostore music box kit](https://www.amazon.com/dp/B0774TSP3T?th=1)) from symbolicly-notated music, e.g. MIDI files.
 
