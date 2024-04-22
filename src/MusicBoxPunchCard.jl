@@ -1,7 +1,8 @@
 module MusicBoxPunchCard
 
 using MIDI
-using PortAudio, SampledSignals
+using PortAudio
+using SampledSignals
 using ProgressMeter
 
 export midi_to_hz, play_single_freq, DEFAULT_MUSIC_BOX_NOTES, flatten_midi_to_freq_event,
