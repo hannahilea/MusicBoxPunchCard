@@ -1,4 +1,4 @@
-module MusicBoxPunchCard
+module MusicBoxPunchCardMaker
 
 using MIDI
 using PortAudio
@@ -202,4 +202,4 @@ function play_punch_card_preview(; song_transposed, sec_per_tick, kwargs...)
     return play_midi(song_transposed; sec_per_tick)
 end
 
-end # module MusicBoxPunchCard
+end # module MusicBoxPunchCardMaker

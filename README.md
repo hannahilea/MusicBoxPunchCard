@@ -1,4 +1,4 @@
-# MusicBoxPunchCard: Create playable punch cards for music boxes!
+# MusicBoxPunchCardMaker: Create playable punch cards for music boxes!
 
 Utilities for generating physical punch cards for playable music boxes (e.g. 15-note [Kikkerland music box kit](https://kikkerland.com/products/make-your-own-music-box-kit) or [30-note Wingostore music box kit](https://www.amazon.com/dp/B0774TSP3T?th=1)) from symbolicly-notated music, e.g. MIDI files.
 
@@ -12,14 +12,14 @@ Under active development! Next dev steps:
 
 1. Install Julia
 2. Clone this repo
-2. Launch Julia REPL: `julia --project=/path/to/MusicBoxPunchCard`
+2. Launch Julia REPL: `julia --project=/path/to/MusicBoxPunchCardMaker`
 2. In Julia REPL
 ```julia
 using Pkg
 Pkg.activate(".")
-using MusicBoxPunchCard
+using MusicBoxPunchCardMaker
 
-file = joinpath(pkgdir(MusicBoxPunchCard), "demo_songs", "ThousandMiles.mid")
+file = joinpath(pkgdir(MusicBoxPunchCardMaker), "demo_songs", "ThousandMiles.mid")
 
 # Run the conversion
 output = midi_to_musicbox(DEMO_FILE)
