@@ -5,22 +5,21 @@ using PortAudio
 using SampledSignals
 using ProgressMeter
 
-# export midi_to_hz, play_single_freq, DEFAULT_MUSIC_BOX_NOTES, flatten_midi_to_freq_event,
-#        audio_samples_from_freq_events, audio_samples_from_freq_event, play_audio_signal,
-#        flatten_midi_to_midi_notes, midi_notes_to_freq_notes, DEFAULT_SAMPLE_RATE,
-#        play_midi_notes, find_best_transposition_amount, generate_music_box_midi,
-#        get_min_max_internote_ticks
-
 export midi_to_musicbox, play_punch_card_preview
 
 const DEFAULT_SAMPLE_RATE = 11250.0
 const MUSIC_BOX_NOTE_DURATION_TICKS = 96
 
+# Note: default for 15-note music box only
 const DEFAULT_MUSIC_BOX_NOTES = let
     start_note = 68 # Ab3 
     start_scale = start_note .+ [0, 2, 4, 5, 7, 9, 11, 12]
     sort(unique(vcat(start_scale, start_scale .+ 12)); rev=true)
 end
+
+#####
+##### Helper functions
+#####
 
 midi_to_hz(v::Int) = 440 * 2^((v - 69) / 12)
 
@@ -182,9 +181,9 @@ function midi_to_musicbox(filename; allowed_notes=DEFAULT_MUSIC_BOX_NOTES, quiet
     @debug tick_ranges
 
     noteCoordinatesX = map(n -> tick_ranges.min > 0 ? n.start_time_ticks / tick_ranges.min :
-                             n.start_time_ticks, song_transposed)
+                                n.start_time_ticks, song_transposed)
     noteCoordinatesY = map(n -> findfirst(==(n.midi_note), allowed_notes) - 1,
-                        song_transposed)
+                           song_transposed)
 
     if !quiet_mode
         println("")
