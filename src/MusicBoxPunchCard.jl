@@ -5,13 +5,13 @@ using PortAudio
 using SampledSignals
 using ProgressMeter
 
-export midi_to_hz, play_single_freq, DEFAULT_MUSIC_BOX_NOTES, flatten_midi_to_freq_event,
-       audio_samples_from_freq_events, audio_samples_from_freq_event, play_audio_signal,
-       flatten_midi_to_midi_notes, midi_notes_to_freq_notes, DEFAULT_SAMPLE_RATE,
-       play_midi_notes, find_best_transposition_amount, generate_music_box_midi,
-       get_min_max_internote_ticks
+# export midi_to_hz, play_single_freq, DEFAULT_MUSIC_BOX_NOTES, flatten_midi_to_freq_event,
+#        audio_samples_from_freq_events, audio_samples_from_freq_event, play_audio_signal,
+#        flatten_midi_to_midi_notes, midi_notes_to_freq_notes, DEFAULT_SAMPLE_RATE,
+#        play_midi_notes, find_best_transposition_amount, generate_music_box_midi,
+#        get_min_max_internote_ticks
 
-export midi_to_musicbox
+export midi_to_musicbox, play_punch_card_preview
 
 const DEFAULT_SAMPLE_RATE = 11250.0
 const MUSIC_BOX_NOTE_DURATION_TICKS = 96
@@ -84,7 +84,7 @@ function audio_samples_from_freq_events(freq_events; samplerate)
     _sec_to_index(sec) = sec * samplerate + 1
     max_duration = maximum([e.start_time + e.duration for e in freq_events])
     samples = vec(zeros(Int(ceil(_sec_to_index(max_duration)))))
-    @info "Total size:" size(samples)
+    @debug "Total size:" size(samples)
     for e in freq_events
         # prob subtly buggy! should use AlignedSampels going forward etc
         start = Int(floor(_sec_to_index(e.start_time)))
@@ -159,12 +159,19 @@ function get_min_max_internote_ticks(midi_notes::Vector{AbsoluteNoteMidi})
     return (; per_note, max, min)
 end
 
-function midi_to_musicbox(filename; allowed_notes=DEFAULT_MUSIC_BOX_NOTES)
+#####
+##### Public interface
+#####
+
+#TODO docstring
+function midi_to_musicbox(filename; allowed_notes=DEFAULT_MUSIC_BOX_NOTES, quiet_mode=false,
+                          transposition_amount=missing)
     midi = load(filename)
     track = midi.tracks[1]
     song_midi = flatten_midi_to_midi_notes(track.events)
     sec_per_tick = MIDI.ms_per_tick(midi) / 1000
-    transpose_amount = find_best_transposition_amount(song_midi)
+    transpose_amount = ismissing(transposition_amount) ?
+                       find_best_transposition_amount(song_midi) : transposition_amount
     song_transposed = generate_music_box_midi(song_midi; transpose_amount)
 
     # GREAT!!!!! :D Now: let's get it into a format that cuttle can handle
@@ -172,22 +179,28 @@ function midi_to_musicbox(filename; allowed_notes=DEFAULT_MUSIC_BOX_NOTES)
     # such that cuttle can appropariately scale the x axis to prevent overlapping notes 
     # In future, might want to control for speed of rotation 
     tick_ranges = get_min_max_internote_ticks(song_transposed)
-    @info tick_ranges
+    @debug tick_ranges
 
-    song_coords_x = map(n -> tick_ranges.min > 0 ? n.start_time_ticks / tick_ranges.min :
+    noteCoordinatesX = map(n -> tick_ranges.min > 0 ? n.start_time_ticks / tick_ranges.min :
                              n.start_time_ticks, song_transposed)
-    song_coords_y = map(n -> findfirst(==(n.midi_note), allowed_notes) - 1,
+    noteCoordinatesY = map(n -> findfirst(==(n.midi_note), allowed_notes) - 1,
                         song_transposed)
 
-    # let
-    #     # ...also subtract 1 from y index to convert from 1-based index to 0-based js index
-    #     str = join(map(c -> string(first(c), ",", last(c) - 1), song_coords), "\n")
-    #     new_file = replace(filename, ".mid" => ".txt")
-    #     write(new_file, str)
-    #     @info "Wrote $(new_file)"
-    # end
+    if !quiet_mode
+        println("")
+        @info """Go to `https://cuttle.xyz/@hannahilea/Music-roll-punchcards-for-music-boxes-iTT4lnLVNL5f`, 
+                    - copy this into `noteCoordinatesX`:
+                      $(noteCoordinatesX)
 
-    return (; song_transposed, sec_per_tick, song_coords_x, song_coords_y)
+                    - copy this into `noteCoordinatesY`:
+                      $(noteCoordinatesY)
+                    """
+    end
+    return (; song_transposed, sec_per_tick, noteCoordinatesX, noteCoordinatesY)
+end
+
+function play_punch_card_preview(; song_transposed, sec_per_tick, kwargs...)
+    return play_midi(song_transposed; sec_per_tick)
 end
 
 end # module MusicBoxPunchCard
