@@ -37,14 +37,14 @@ play_midi_notes(midi_notes[1:60]; sec_per_tick)
 song_midi = midi_notes[1:60]
 
 transpose_amount = find_best_transposition_amount(song_midi)
-music_box_notes = generate_music_box_midi(song_midi; transpose_amount)
-play_midi_notes(music_box_notes; sec_per_tick)
+song_midi_adjusted = generate_music_box_midi(song_midi; transpose_amount)
+play_midi_notes(song_midi_adjusted; sec_per_tick)
 
 # GREAT!!!!! :D Now: let's get it into a format that cuttle can handle
 # For now, set it up such that the x distance between two adjacent holes is 1, 
 # such that cuttle can appropariately scale the x axis to prevent overlapping notes 
 # In future, might want to control for speed of rotation 
-tick_ranges = get_min_max_internote_ticks(music_box_notes)
+tick_ranges = get_min_max_internote_ticks(song_midi_adjusted)
 
 # Demo song 1: thousand miles
 tm = joinpath(pkgdir(MusicBoxPunchCardMaker), "demo_songs", "ThousandMiles.mid")

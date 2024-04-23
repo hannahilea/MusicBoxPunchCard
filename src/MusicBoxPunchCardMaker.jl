@@ -240,13 +240,14 @@ function midi_to_musicbox(filename; music_box_notes, quiet_mode=false,
     transpose_amount = ismissing(transposition_amount) ?
                        find_best_transposition_amount(song_midi; music_box_notes) :
                        transposition_amount
-    music_box_notes = generate_music_box_midi(song_midi; music_box_notes, transpose_amount)
+    song_midi_adjusted = generate_music_box_midi(song_midi; music_box_notes,
+                                                 transpose_amount)
 
     # GREAT!!!!! :D Now: let's get it into a format that cuttle can handle
     # For now, set it up such that the x distance between two adjacent holes is 1, 
     # such that cuttle can appropariately scale the x axis to prevent overlapping notes 
     # In future, might want to control for speed of rotation.
-    tick_ranges = get_min_max_internote_ticks(music_box_notes)
+    tick_ranges = get_min_max_internote_ticks(song_midi_adjusted)
     @debug tick_ranges
 
     # Because we unique'd over notes in `generate_music_box_midi`,
@@ -256,18 +257,18 @@ function midi_to_musicbox(filename; music_box_notes, quiet_mode=false,
     # all notes can be played.
     # TODO-future: adjust x-coords for a fixed playback crank rotation! and/or 
     # return the required playback crank rotation to support the MIDI bpm
-    noteCoordinatesX = map(n -> n.start_time_ticks / tick_ranges.min, music_box_notes)
+    noteCoordinatesX = map(n -> n.start_time_ticks / tick_ranges.min, song_midi_adjusted)
 
     # Note that we subtract by 1 here because we're converting from 1-based indices (Julia)
     # to 0-based indices (javascript, as used by Cuttle)
     noteCoordinatesY = map(n -> findfirst(==(n.midi_note), music_box_notes) - 1,
-                           music_box_notes)
+                           song_midi_adjusted)
 
     if !quiet_mode
         println("")
         @info """Conversion succeeded (transpoition amount: $(transpose_amount))
                     Go to Cuttle template `https://cuttle.xyz/@hannahilea/Music-roll-punchcards-for-music-boxes-iTT4lnLVNL5f`
-                    - Use template for $(length(music_box_notes)) note music roll
+                    - Use template for $(length(song_midi_adjusted)) note music roll
 
                     - copy into template's `noteCoordinatesX`:
                       $(noteCoordinatesX)
@@ -276,19 +277,19 @@ function midi_to_musicbox(filename; music_box_notes, quiet_mode=false,
                       $(noteCoordinatesY)
                     """
     end
-    return (; music_box_notes, sec_per_tick, noteCoordinatesX, noteCoordinatesY,
+    return (; song_midi_adjusted, sec_per_tick, noteCoordinatesX, noteCoordinatesY,
             transpose_amount)
 end
 
 """
-    play_punch_card_preview(; music_box_notes, sec_per_tick, kwargs...) -> nothing
+    play_punch_card_preview(; song_midi_adjusted, sec_per_tick, kwargs...) -> nothing
 
-Basic MIDI synth playaback of `music_box_notes` at tempo `sec_per_tick`. 
+Basic MIDI synth playaback of `song_midi_adjusted` at tempo `sec_per_tick`. 
 All other `kwargs` will be ignored. May misbehave if audio configuration changes 
 during Julia session (e.g., headphones switched, etc).
 """
-function play_punch_card_preview(; music_box_notes, sec_per_tick, kwargs...)
-    return play_midi_notes(music_box_notes; sec_per_tick)
+function play_punch_card_preview(; song_midi_adjusted, sec_per_tick, kwargs...)
+    return play_midi_notes(song_midi_adjusted; sec_per_tick)
 end
 
 end # module MusicBoxPunchCardMaker
