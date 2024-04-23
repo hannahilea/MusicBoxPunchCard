@@ -137,8 +137,8 @@ function generate_music_box_midi(midi_notes::Vector{AbsoluteNoteMidi};
     return unique(filter(n -> n.midi_note in music_box_notes, adjusted_notes))
 end
 
-#TODO-future: if multiple good, return all
 # Currently optimizes for most total notes; could instead weight chroma equally
+# If multiple good options, returns first found
 function find_best_transposition_amount(midi_notes::Vector{AbsoluteNoteMidi};
                                         music_box_notes)
     best_offset = 0
@@ -178,14 +178,6 @@ function get_min_max_internote_ticks(midi_notes::Vector{AbsoluteNoteMidi})
         length(single_note) <= 1 && return (missing, missing)
         dists = [n.start_time_ticks for n in single_note]
         d = diff(dists)
-
-        # t = findall(==(1), d .== 0)
-        # if !isempty(t)
-        #     @info note t single_note[first(t)] === single_note[first(t) + 1]
-        #     println(single_note[t])
-        #     println(single_note[t .+ 1])
-        #     println("")
-        # end
         return extrema(d)
     end
     min = minimum(skipmissing(first(d) for d in per_note))
@@ -199,32 +191,62 @@ end
 
 """
     midi_to_musicbox(filename; music_box_notes, quiet_mode=false,
-                     transposition_amount=missing, note_range=missing,
-                     track_range=missing) -> NamedTuple
+                     transposition_amount=missing, notes_slice=missing,
+                     tracks_slice=missing) -> NamedTuple
+
+Return named tuple of MIDI `filename` converted to a coordinate set of plottable 
+X- and Y- values for the given MIDI notes. 
+
+ARGS
+* `filename`: Path to input MIDI file
+* `music_box_notes`: Notes (MIDI note numbers) playable by a given music box; should be
+    sorted by desired output index. Should be either `MUSIC_BOX_15_NOTES` or 
+    `MUSIC_BOX_30_NOTES` unless a custom box is present. All MIDI note events in `filename`
+    that do not occur in `musib_box_notes` (after `transposition_amount` is applied)
+    will be stripped from output `music_box_notes`.
+* `quiet_mode`: Default false; supresses info statements that contain output values
+    coordinate arrays. 
+* `transposition_amount`: Transposition offset applied to input MIDI file notes. 
+    If `missing`, an optimimal transposition amount is selected for the given 
+    input notes and `music_box_notes`. Set to `0` to prevent transposition. Default is `missing`.
+* `notes_slice`: If non-missing, indicates range of note indices to include in output song.
+     If `missing`, all notes are included. Default is `missing`.
+* `tracks_slice`: If `filename` contains multiple tracks and `tracks_slice` is non-missing, 
+    indicates tracks to include. Default is `missing`.
+
+OUTPUT KWARGS
+* `music_box_notes`: Vector of output [`MusicBoxPunchCardMaker.AbsoluteNoteMidi`](@ref) notes, 
+    to be used in playback preview (see [`play_punch_card_preview`](@ref)). Used to 
+    derive `noteCoordinatesX` and `noteCoordinatesY`.
+* `sec_per_tick`: BPM conversion from input MIDI file, currently used only in previewing 
+    output song ([`play_punch_card_preview`](@ref))
+* `noteCoordinatesX`: Per-note x-coordinate values to be input into SVG punch card template 
+* `noteCoordinatesY`: Per-note y-coordinate values to be input into SVG punch card template 
+* `transpose_amount`: Transposition (semitone offset) applied to original MIDI file to generate `music_box_notes`
 """
 function midi_to_musicbox(filename; music_box_notes, quiet_mode=false,
-                          transposition_amount=missing, note_range=missing,
-                          track_range=missing)
+                          transposition_amount=missing, notes_slice=missing,
+                          tracks_slice=missing)
     midi = load(filename)
-    ismissing(track_range) && (track_range = 1:length(midi.tracks))
-    song_midi = vcat(map(midi.tracks[track_range]) do track
+    ismissing(tracks_slice) && (tracks_slice = 1:length(midi.tracks))
+    song_midi = vcat(map(midi.tracks[tracks_slice]) do track
                          return song_midi = flatten_midi_to_midi_notes(track.events)
                      end...)
     song_midi = sort(song_midi; by=m -> m.start_time_ticks)
-    if !ismissing(note_range)
-        song_midi = song_midi[note_range]
+    if !ismissing(notes_slice)
+        song_midi = song_midi[notes_slice]
     end
     sec_per_tick = MIDI.ms_per_tick(midi) / 1000
     transpose_amount = ismissing(transposition_amount) ?
                        find_best_transposition_amount(song_midi; music_box_notes) :
                        transposition_amount
-    song_transposed = generate_music_box_midi(song_midi; music_box_notes, transpose_amount)
+    music_box_notes = generate_music_box_midi(song_midi; music_box_notes, transpose_amount)
 
     # GREAT!!!!! :D Now: let's get it into a format that cuttle can handle
     # For now, set it up such that the x distance between two adjacent holes is 1, 
     # such that cuttle can appropariately scale the x axis to prevent overlapping notes 
     # In future, might want to control for speed of rotation.
-    tick_ranges = get_min_max_internote_ticks(song_transposed)
+    tick_ranges = get_min_max_internote_ticks(music_box_notes)
     @debug tick_ranges
 
     # Because we unique'd over notes in `generate_music_box_midi`,
@@ -234,12 +256,12 @@ function midi_to_musicbox(filename; music_box_notes, quiet_mode=false,
     # all notes can be played.
     # TODO-future: adjust x-coords for a fixed playback crank rotation! and/or 
     # return the required playback crank rotation to support the MIDI bpm
-    noteCoordinatesX = map(n -> n.start_time_ticks / tick_ranges.min, song_transposed)
+    noteCoordinatesX = map(n -> n.start_time_ticks / tick_ranges.min, music_box_notes)
 
     # Note that we subtract by 1 here because we're converting from 1-based indices (Julia)
     # to 0-based indices (javascript, as used by Cuttle)
     noteCoordinatesY = map(n -> findfirst(==(n.midi_note), music_box_notes) - 1,
-                           song_transposed)
+                           music_box_notes)
 
     if !quiet_mode
         println("")
@@ -254,12 +276,19 @@ function midi_to_musicbox(filename; music_box_notes, quiet_mode=false,
                       $(noteCoordinatesY)
                     """
     end
-    return (; song_transposed, sec_per_tick, noteCoordinatesX, noteCoordinatesY,
+    return (; music_box_notes, sec_per_tick, noteCoordinatesX, noteCoordinatesY,
             transpose_amount)
 end
 
-function play_punch_card_preview(; song_transposed, sec_per_tick, kwargs...)
-    return play_midi_notes(song_transposed; sec_per_tick)
+"""
+    play_punch_card_preview(; music_box_notes, sec_per_tick, kwargs...) -> nothing
+
+Basic MIDI synth playaback of `music_box_notes` at tempo `sec_per_tick`. 
+All other `kwargs` will be ignored. May misbehave if audio configuration changes 
+during Julia session (e.g., headphones switched, etc).
+"""
+function play_punch_card_preview(; music_box_notes, sec_per_tick, kwargs...)
+    return play_midi_notes(music_box_notes; sec_per_tick)
 end
 
 end # module MusicBoxPunchCardMaker

@@ -6,7 +6,7 @@ using MIDI
 
 using MusicBoxPunchCardMaker: DEFAULT_SAMPLE_RATE, play_single_freq, midi_to_hz,
                               flatten_midi_to_midi_notes, play_midi_notes,
-                              find_best_transposition_amount,generate_music_box_midi,
+                              find_best_transposition_amount, generate_music_box_midi,
                               get_min_max_internote_ticks
 
 samplerate = DEFAULT_SAMPLE_RATE
@@ -37,18 +37,19 @@ play_midi_notes(midi_notes[1:60]; sec_per_tick)
 song_midi = midi_notes[1:60]
 
 transpose_amount = find_best_transposition_amount(song_midi)
-song_transposed = generate_music_box_midi(song_midi; transpose_amount)
-play_midi_notes(song_transposed; sec_per_tick)
+music_box_notes = generate_music_box_midi(song_midi; transpose_amount)
+play_midi_notes(music_box_notes; sec_per_tick)
 
 # GREAT!!!!! :D Now: let's get it into a format that cuttle can handle
 # For now, set it up such that the x distance between two adjacent holes is 1, 
 # such that cuttle can appropariately scale the x axis to prevent overlapping notes 
 # In future, might want to control for speed of rotation 
-tick_ranges = get_min_max_internote_ticks(song_transposed)
+tick_ranges = get_min_max_internote_ticks(music_box_notes)
 
 # Demo song 1: thousand miles
 tm = joinpath(pkgdir(MusicBoxPunchCardMaker), "demo_songs", "ThousandMiles.mid")
-tm_output = midi_to_musicbox(tm; music_box_notes=MUSIC_BOX_15_NOTES, note_range=1:60, track_range=missing)
+tm_output = midi_to_musicbox(tm; music_box_notes=MUSIC_BOX_15_NOTES, notes_slice=1:60,
+                             tracks_slice=missing)
 play_punch_card_preview(; tm_output...)
 
 # Demo song 2: PK's "still dre"
@@ -57,7 +58,8 @@ pk_output = midi_to_musicbox(pk; music_box_notes=MUSIC_BOX_15_NOTES);
 play_punch_card_preview(; pk_output...)
 
 # Demo song 3: AD's "pure imagination"
-ad = joinpath(pkgdir(MusicBoxPunchCardMaker), "demo_songs", "ad_pure_imagination_short_musicbox.mid")
+ad = joinpath(pkgdir(MusicBoxPunchCardMaker), "demo_songs",
+              "ad_pure_imagination_short_musicbox.mid")
 ad_output = midi_to_musicbox(ad; music_box_notes=MUSIC_BOX_30_NOTES);
 play_punch_card_preview(; ad_output...)
 
