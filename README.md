@@ -1,9 +1,10 @@
-# MusicBoxPunchCardMaker: Create playable punch cards for music boxes!
+# Music box punch card maker
+
+Create playable punch cards for music boxes!
 
 Utilities for generating physical punch cards for playable music boxes (e.g. 15-note [Kikkerland music box kit](https://kikkerland.com/products/make-your-own-music-box-kit) or [30-note Wingostore music box kit](https://www.amazon.com/dp/B0774TSP3T?th=1)) from symbolicly-notated music, e.g. MIDI files.
 
 Under active development! Next dev steps:
-- [ ] Support 30-note boxes (currently defaults to 15-note boxes)
 - [ ] Generate static website for conversion of MIDI, rather than running Julia script
 - [ ] Support input from [musicbox.fun](https://musicbox.fun)
 - [ ] Repo niceties as still needed (CI/etc)
