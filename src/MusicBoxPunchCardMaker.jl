@@ -50,7 +50,7 @@ function get_event_duration_ticks(n, events)
     return t
 end
 
-Base.@kwdef mutable struct AbsoluteNoteMidi
+Base.@kwdef struct AbsoluteNoteMidi
     midi_note::Int
     start_time_ticks::Int
     duration_ticks::Int
@@ -58,13 +58,15 @@ end
 
 # Assumes each note on has corresponding note off
 function flatten_midi_to_midi_notes(midi_events::Vector{TrackEvent})
-    #TODO-future: validate that events are valid??
 
+    # Sometimes note off events are encoded as note on events with velocity=0;
+    # convert them up front for happier downstream note on/off matching
     midi_events = map(midi_events) do e
         return (isa(e, MIDI.NoteOnEvent) && e.velocity == 0) ?
                MIDI.NoteOffEvent(e.dT, e.note, 0) : e
     end
 
+    # Collect all note on/off pairs as individual note events
     time_ticks = 0
     midi_notes = AbsoluteNoteMidi[] # In absolute time, not the relative time of events
     for (i, event) in enumerate(midi_events)
@@ -78,11 +80,13 @@ function flatten_midi_to_midi_notes(midi_events::Vector{TrackEvent})
             # Already handled in above case 
         elseif !(isa(event, MIDI.TimeSignatureEvent) || isa(event, MIDI.SetTempoEvent) ||
                  isa(event, MIDI.MIDI.KeySignatureEvent) ||
-                 isa(event, MIDI.TrackNameEvent) ||
+                 isa(event, MIDI.SMPTEOffsetEvent) ||
+                 isa(event, MIDI.TrackNameEvent) || isa(event, MIDI.InstrumentNameEvent) ||
                  isa(event, MIDI.ProgramChangeEvent) ||
+                 isa(event, MIDI.MIDIChannelPrefixEvent) ||
                  isa(event, MIDI.ControlChangeEvent) || isa(event, MIDI.MIDIPort) ||
-                 isa(event, MIDI.MIDI.MIDI.PitchBendEvent))
-            @warn "Event type unsupported: $event"
+                 isa(event, MIDI.PitchBendEvent))
+            @warn "Event type unsupported: $event" # Is this important? No, more to keep track of potential event types for our future selves
         end
     end
     return midi_notes
@@ -101,7 +105,6 @@ function audio_samples_from_freq_events(freq_events; samplerate)
     _sec_to_index(sec) = sec * samplerate + 1
     max_duration = maximum([e.start_time + e.duration for e in freq_events])
     samples = vec(zeros(Int(ceil(_sec_to_index(max_duration)))))
-    @debug "Total size:" size(samples)
     for e in freq_events
         # prob subtly buggy! should use AlignedSampels going forward etc
         start = Int(floor(_sec_to_index(e.start_time)))
@@ -126,13 +129,12 @@ end
 
 function generate_music_box_midi(midi_notes::Vector{AbsoluteNoteMidi};
                                  music_box_notes, transpose_amount)
-    notes = deepcopy(midi_notes)
-    notes = map(notes) do n
-        n.midi_note += transpose_amount
-        n.duration_ticks = MUSIC_BOX_NOTE_DURATION_TICKS
-        return n
+    adjusted_notes = map(midi_notes) do n
+        return AbsoluteNoteMidi(; midi_note=n.midi_note + transpose_amount,
+                                n.start_time_ticks,
+                                duration_ticks=MUSIC_BOX_NOTE_DURATION_TICKS)
     end
-    return filter(n -> n.midi_note in music_box_notes, notes)
+    return unique(filter(n -> n.midi_note in music_box_notes, adjusted_notes))
 end
 
 #TODO-future: if multiple good, return all
@@ -141,12 +143,21 @@ function find_best_transposition_amount(midi_notes::Vector{AbsoluteNoteMidi};
                                         music_box_notes)
     best_offset = 0
     highest_num_valid_notes = 0
-    for transpose_amount in 0:(21 + 24)
+
+    song_extrema = extrema(m.midi_note for m in midi_notes)
+    box_extrema = extrema(music_box_notes)
+    transposition_range = let
+        start_range = first(box_extrema) - last(song_extrema) - 1
+        stop_range = last(box_extrema) - first(song_extrema) + 1
+        start_range:stop_range
+    end
+
+    @debug "Transposition range" transposition_range song_extrema box_extrema s = length(collect(transposition_range))
+    for transpose_amount in transposition_range
         transposed_notes = generate_music_box_midi(midi_notes; music_box_notes,
                                                    transpose_amount)
         num_valid_notes = length(transposed_notes)
         num_valid_notes == 0 && continue
-        @debug "For $(transpose_amount): $(num_valid_notes)"
 
         # Early return if we've found a transposition that succeeds!
         num_valid_notes == length(midi_notes) && return transpose_amount
@@ -167,7 +178,15 @@ function get_min_max_internote_ticks(midi_notes::Vector{AbsoluteNoteMidi})
         length(single_note) <= 1 && return (missing, missing)
         dists = [n.start_time_ticks for n in single_note]
         d = diff(dists)
-        return minimum(d), maximum(d)
+
+        # t = findall(==(1), d .== 0)
+        # if !isempty(t)
+        #     @info note t single_note[first(t)] === single_note[first(t) + 1]
+        #     println(single_note[t])
+        #     println(single_note[t .+ 1])
+        #     println("")
+        # end
+        return extrema(d)
     end
     min = minimum(skipmissing(first(d) for d in per_note))
     max = maximum(skipmissing(last(d) for d in per_note))
@@ -182,8 +201,6 @@ end
     midi_to_musicbox(filename; music_box_notes, quiet_mode=false,
                      transposition_amount=missing, note_range=missing,
                      track_range=missing) -> NamedTuple
-
-                     TODO DOCUMENT
 """
 function midi_to_musicbox(filename; music_box_notes, quiet_mode=false,
                           transposition_amount=missing, note_range=missing,
@@ -206,18 +223,28 @@ function midi_to_musicbox(filename; music_box_notes, quiet_mode=false,
     # GREAT!!!!! :D Now: let's get it into a format that cuttle can handle
     # For now, set it up such that the x distance between two adjacent holes is 1, 
     # such that cuttle can appropariately scale the x axis to prevent overlapping notes 
-    # In future, might want to control for speed of rotation 
+    # In future, might want to control for speed of rotation.
     tick_ranges = get_min_max_internote_ticks(song_transposed)
     @debug tick_ranges
 
-    noteCoordinatesX = map(n -> tick_ranges.min > 0 ? n.start_time_ticks / tick_ranges.min :
-                                n.start_time_ticks, song_transposed)
+    # Because we unique'd over notes in `generate_music_box_midi`,
+    # we know the minimum diffs will be greater than 0. 
+    # The resultant coordinates will be a minimum distance of "1" apart---which 
+    # can be adjusted in cuttle to meet requirements of printed material such that 
+    # all notes can be played.
+    # TODO-future: adjust x-coords for a fixed playback crank rotation! and/or 
+    # return the required playback crank rotation to support the MIDI bpm
+    noteCoordinatesX = map(n -> n.start_time_ticks / tick_ranges.min, song_transposed)
+
+    # Note that we subtract by 1 here because we're converting from 1-based indices (Julia)
+    # to 0-based indices (javascript, as used by Cuttle)
     noteCoordinatesY = map(n -> findfirst(==(n.midi_note), music_box_notes) - 1,
                            song_transposed)
 
     if !quiet_mode
         println("")
-        @info """Go to Cuttle template `https://cuttle.xyz/@hannahilea/Music-roll-punchcards-for-music-boxes-iTT4lnLVNL5f`
+        @info """Conversion succeeded (transpoition amount: $(transpose_amount))
+                    Go to Cuttle template `https://cuttle.xyz/@hannahilea/Music-roll-punchcards-for-music-boxes-iTT4lnLVNL5f`
                     - Use template for $(length(music_box_notes)) note music roll
 
                     - copy into template's `noteCoordinatesX`:
@@ -227,7 +254,8 @@ function midi_to_musicbox(filename; music_box_notes, quiet_mode=false,
                       $(noteCoordinatesY)
                     """
     end
-    return (; song_transposed, sec_per_tick, noteCoordinatesX, noteCoordinatesY)
+    return (; song_transposed, sec_per_tick, noteCoordinatesX, noteCoordinatesY,
+            transpose_amount)
 end
 
 function play_punch_card_preview(; song_transposed, sec_per_tick, kwargs...)

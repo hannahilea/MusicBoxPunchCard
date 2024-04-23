@@ -53,10 +53,15 @@ play_punch_card_preview(; tm_output...)
 
 # Demo song 2: PK's "still dre"
 pk = joinpath(pkgdir(MusicBoxPunchCardMaker), "demo_songs", "pk-still-dre.mid")
-pk_output = midi_to_musicbox(pk; music_box_notes=MUSIC_BOX_15_NOTES)
-play_midi_notes(; pk_output...)
+pk_output = midi_to_musicbox(pk; music_box_notes=MUSIC_BOX_15_NOTES);
+play_punch_card_preview(; pk_output...)
 
 # Demo song 3: AD's "pure imagination"
 ad = joinpath(pkgdir(MusicBoxPunchCardMaker), "demo_songs", "ad_pure_imagination_short_musicbox.mid")
-aad_output = midi_to_musicbox(pk; music_box_notes=MUSIC_BOX_30_NOTES);
+ad_output = midi_to_musicbox(ad; music_box_notes=MUSIC_BOX_30_NOTES);
 play_punch_card_preview(; ad_output...)
+
+# Demo song 4: WW's "baby"
+ww = joinpath(pkgdir(MusicBoxPunchCardMaker), "demo_songs", "ww_baby.mid")
+ww_output = midi_to_musicbox(ww; music_box_notes=MUSIC_BOX_30_NOTES, quiet_mode=true);
+play_punch_card_preview(; ww_output...)
