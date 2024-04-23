@@ -7,7 +7,7 @@ using MusicBoxPunchCardMaker
 end
 
 @testset "MusicBoxPunchCardMaker" begin
-    quiet_mod = true
+    quiet_mode = true
     midi_file = joinpath(pkgdir(MusicBoxPunchCardMaker), "demo_songs", "ThousandMiles.mid")
     thousand = midi_to_musicbox(midi_file; music_box_notes=MUSIC_BOX_15_NOTES,
                                 quiet_mode)
